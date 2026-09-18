@@ -1,0 +1,41 @@
+{
+  "summary": "Full regression pass: all 11 backend pytest tests pass and end-to-end frontend flow (admin login, sidebar navigation across 8 pages, plan create, member create, member detail + renewal, notifications retry, audit log, payments+receipt links, settings save, admin logout, member portal OTP login, member portal shows real data from /api/member/me, member sign out) succeed. Brute-force lockout now correctly returns 429 after 5 bad admin logins (regression from iteration 3 fixed).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "seed()", "issue": "Admin password reconciliation on rotation still not implemented (seed only inserts when absent). Cosmetic; documented in prior report."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Add member modal / Plans <select>", "issues": ["React hydration console warning: <span> cannot be child of <option>. Caused by preview runtime's x-source instrumentation wrapping each option's text in a <span>; does not affect functionality but pollutes console."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_titangym_api.py",
+    "/app/test_reports/pytest/pytest_results_iteration4.xml"
+  ],
+  "action_items": [
+    "(Optional) Make seed idempotently update the admin password if env-configured credentials rotate.",
+    "(Optional) Reconcile the <option> children so the preview instrumentation cannot inject a <span> child (e.g., avoid inline JSX expressions inside <option>). Non-blocking."
+  ],
+  "critical_code_review_comments": [
+    "Brute-force lockout implemented correctly in routers.login using db.login_attempts with 5 failures -> 15 min lock.",
+    "Member portal is now data-driven from /api/member/me via httpOnly member_token cookie; days_remaining, plan, history and payments all render.",
+    "APScheduler + dedup_key on notifications delivers per-day idempotency (verified: second /api/jobs/run returns zero counters).",
+    "Renewal correctly extends from the current expiry when today < expiry (verified via test_renewal_extends_before_expiry_does_not_shrink)."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_4.json",
+    "/app/test_reports/pytest/pytest_results_iteration4.xml"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% of exercised flows"},
+  "test_credentials": "Admin admin@titangym.in / Titan@123; Member phone +91 98111 22031 dev OTP 123456 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Test suite created TEST Plan API, Renewal-Test Plan, TEST API Member, Renewal Member. UI walk created one 'UI Test Plan {ts}' and 'UI Test {ts}' member. All persisted correctly.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Everything in the review request is verified green. Only cosmetic console warning about <span> inside <option> remains (preview instrumentation artifact). No regressions.",
+  "rca of the issue": "N/A — no blocking issues."
+}
