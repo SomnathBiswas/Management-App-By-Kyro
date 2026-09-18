@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="2.814" timestamp="2026-09-18T19:41:53.914035+00:00" hostname="agent-env-47768e29-3239-4fec-8d20-1f2ba8cb117d"><testcase classname="tests.test_titangym_api" name="test_admin_auth_and_dashboard" time="0.736" /><testcase classname="tests.test_titangym_api" name="test_member_otp_flow" time="0.274"><failure message="assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code">backend/tests/test_titangym_api.py:32: in test_member_otp_flow
+    assert verified.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="tests.test_titangym_api" name="test_member_and_plan_creation_persistence" time="0.716" /><testcase classname="tests.test_titangym_api" name="test_lifecycle_endpoint_is_idempotent_safe" time="0.519" /></testsuite></testsuites>

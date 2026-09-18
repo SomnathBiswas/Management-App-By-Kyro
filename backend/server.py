@@ -36,6 +36,14 @@ def iso(value: Any) -> str:
     return value.isoformat() if isinstance(value, (datetime, date)) else str(value)
 
 
+def aware_utc(value: Any) -> datetime:
+    if not isinstance(value, datetime):
+        return now()
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def clean(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not doc:
         return doc
@@ -184,7 +192,8 @@ async def request_otp(payload: Dict[str, str]) -> Dict[str, Any]:
 @api.post("/auth/member/verify-otp")
 async def verify_otp(payload: OtpInput, response: Response) -> Dict[str, Any]:
     record = await db.otp.find_one({"phone": payload.phone})
-    if not record or record.get("otp") != payload.otp or record.get("expires_at", now()) < now():
+    expires_at = aware_utc(record.get("expires_at")) if record else now()
+    if not record or record.get("otp") != payload.otp or expires_at < now():
         raise HTTPException(401, "Invalid or expired OTP")
     member = await db.members.find_one({"phone": payload.phone}, {"_id": 0})
     response.set_cookie("member_token", token_for({"id": member["id"], "role": "MEMBER"}), httponly=True, samesite="lax", max_age=43200)
@@ -299,7 +308,11 @@ async def member_me(request: Request) -> Dict[str, Any]:
 
 
 app.include_router(api)
-app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+configured_origins = [origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip() and origin.strip() != "*"]
+frontend_origin = os.environ.get("FRONTEND_URL")
+if frontend_origin and frontend_origin not in configured_origins:
+    configured_origins.append(frontend_origin)
+app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=configured_origins, allow_methods=["*"], allow_headers=["*"])
 
 
 @app.on_event("shutdown")
