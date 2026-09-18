@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 import hashlib
 import logging
 import os
+import re
 import secrets
 
 import bcrypt
@@ -312,7 +313,8 @@ configured_origins = [origin.strip() for origin in os.environ.get("CORS_ORIGINS"
 frontend_origin = os.environ.get("FRONTEND_URL")
 if frontend_origin and frontend_origin not in configured_origins:
     configured_origins.append(frontend_origin)
-app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=configured_origins, allow_methods=["*"], allow_headers=["*"])
+cors_origin_regex = "|".join(re.escape(origin.rstrip("/")) + r"(?::\d+)?" for origin in configured_origins) or None
+app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=configured_origins, allow_origin_regex=cors_origin_regex, allow_methods=["*"], allow_headers=["*"])
 
 
 @app.on_event("shutdown")
