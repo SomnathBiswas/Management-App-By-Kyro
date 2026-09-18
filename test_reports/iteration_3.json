@@ -1,0 +1,54 @@
+{
+  "summary": "Regression API suite and frontend smoke pass. Admin/member httpOnly cookie auth and valid OTP work. Local configured-origin OPTIONS returns 200, while the public preview OPTIONS still returns 400; repeated invalid admin logins are not locked out.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/login",
+        "issue": "No brute-force lockout or throttling after 5 failed attempts; six consecutive invalid password requests all returned 401 and remained unrestricted.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "OPTIONS /api/auth/login",
+        "issue": "Direct local preflight from the configured public origin returns 200 with allow-origin, but the public preview preflight returns 400 Disallowed CORS origin. This is likely proxy/runtime Origin handling rather than the app middleware; direct public credentialed POSTs work."
+      },
+      {
+        "endpoint": "startup seed",
+        "issue": "Existing admin password is not reconciled when the configured/expected password changes; seed only inserts when the user is absent."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_titangym_api.py",
+    "/app/test_reports/pytest/pytest_results_iteration3.xml"
+  ],
+  "action_items": [
+    "Add server-side failed-login tracking with lockout/throttling after 5 attempts.",
+    "Investigate preview proxy forwarding/rewriting of Origin on OPTIONS requests; local middleware configuration is correct.",
+    "Make admin seed idempotently update the existing admin password from configured seed credentials, if password rotation is required."
+  ],
+  "critical_code_review_comments": [
+    "Authentication has no brute-force protection despite the auth test requirement.",
+    "Member portal UI is static/mock data and does not use the authenticated member_token or /api/member/me; renewal action is non-functional.",
+    "WHATSAPP, object storage, and development OTP delivery remain intentionally MOCKED/DISABLED."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_3.json",
+    "/app/test_reports/pytest/pytest_results_iteration3.xml"
+  ],
+  "success_rate": {
+    "backend": "100% core regression; auth hardening requirement failed",
+    "frontend": "100% smoke"
+  },
+  "seed_data_creation": "The regression suite created TEST Plan API and TEST API Member records; existing seeded members were used. No manual seed changes.",
+  "retest_needed": true,
+  "should_call_test_agent_after_fix": true,
+  "context_for_next_testing_agent": "Four regression tests pass. Browser admin login/dashboard, member search, member portal navigation, and logout pass without console errors. Recheck brute-force lockout and public OPTIONS after fixes; verify member portal is wired to member_token if that flow is made functional.",
+  "rca of the issue": "Local FastAPI CORSMiddleware sees the configured origin and returns a valid 200 preflight. The public ingress returns 400 before/around the application CORS decision for the same Origin/request headers, while public credentialed POST login and OTP requests succeed. The lockout gap is directly visible in server.py: login only bcrypt-checks credentials and has no failure counter, delay, or account/IP lock state."
+}
