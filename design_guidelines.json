@@ -1,0 +1,74 @@
+{
+  "app_name": "TitanGym OS",
+  "theme": "dark",
+  "archetype": "THE PERFORMANCE PRO",
+  "typography": {
+    "headings": "Barlow Condensed",
+    "body": "Inter",
+    "weights": {
+      "light": "font-light",
+      "normal": "font-normal",
+      "bold": "font-bold",
+      "heavy": "font-black"
+    },
+    "sizes": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight",
+      "h3": "text-xl sm:text-2xl",
+      "h4": "text-lg sm:text-xl",
+      "body": "text-base",
+      "small": "text-sm"
+    }
+  },
+  "colors": {
+    "primary": "#FF3B30",
+    "secondary": "#0A0A0A",
+    "background": "#0F0F11",
+    "surface": "#18181B",
+    "border": "#27272A",
+    "text": "#FAFAFA",
+    "muted": "#A1A1AA",
+    "accent": "#007AFF"
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-xl bg-black/60 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.37)]",
+    "tracing_beam": "relative rounded-xl border border-white/10 before:absolute before:-inset-px before:rounded-xl before:bg-gradient-to-r before:from-red-500 before:via-orange-500 before:to-transparent before:opacity-50 before:blur-sm",
+    "tactical_card": "bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-6 transition-all duration-200 hover:border-zinc-700 hover:shadow-xl"
+  },
+  "grids": {
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "tetris_grid": "grid grid-cols-1 md:grid-cols-8 lg:grid-cols-12 gap-8"
+  },
+  "motion": {
+    "transition": "transition-transform duration-200 ease-out, opacity 200ms ease",
+    "hover_lift": "hover:-translate-y-1"
+  },
+  "accessibility": {
+    "contrast_ratio": "Minimum 4.5:1 for normal text, 3:1 for large text",
+    "focus_states": "focus:ring-2 focus:ring-red-500 focus:outline-none"
+  },
+  "image_urls": [
+    {
+      "category": "hero_gym",
+      "description": "Gym filled with exercise equipment and professional atmosphere",
+      "url": "https://images.unsplash.com/photo-1671970922029-0430d2ae122c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwxfHxneW0lMjBmaXtenessJTIwd29ya291dCUyMGludGVyaW9yfGVufDB8fHx8MTc4OTc2MDI2OHww&ixlib=rb-4.1.0&q=85"
+    },
+    {
+      "category": "workout_kettlebell",
+      "description": "Black and red kettlebell workout weights",
+      "url": "https://images.unsplash.com/photo-1597076537061-a6b58163aa45?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwyfHxneW0lMjBmaXtenessJTIwd29ya291dCUyMGludGVyaW9yfGVufDB8fHx8MTc4OTc2MDI2OHww&ixlib=rb-4.1.0&q=85"
+    },
+    {
+      "category": "athlete_action",
+      "description": "Athlete performing workout with weights showcasing determination",
+      "url": "https://images.pexels.com/photos/6388466/pexels-photo-6388466.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+    }
+  ],
+  "universal_guidelines": [
+    "You MUST NOT apply universal transition (transition: all).",
+    "DO NOT center align the app container.",
+    "Every interactive and key informational element MUST include a data-testid attribute.",
+    "DO NOT use complete transparent background in header, overlays, or any surface with content under it.",
+    "Ensure high contrast on hover/active/focus states."
+  ]
+}
