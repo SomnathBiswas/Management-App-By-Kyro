@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import csv
+import hashlib
+import hmac
 import io
+import os
+import secrets as _secrets
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from core import (
     STORAGE_ENABLED,
@@ -18,6 +22,7 @@ from core import (
     db,
     hash_identifier,
     issue_token,
+    logger,
     now_utc,
     password_verify,
     today_ist,
@@ -440,6 +445,120 @@ async def retry_notification(notification_id: str, user: Dict[str, Any] = Depend
         actor_role=user.get("role", "ADMIN"),
     )
     return {"success": True, "notification": clean(result)}
+
+
+# =====================================================================
+# WhatsApp Cloud API webhook (Meta)
+# =====================================================================
+
+_STATUS_MAP = {
+    "sent": "SENT",
+    "delivered": "DELIVERED",
+    "read": "READ",
+    "failed": "FAILED",
+}
+
+
+def _verify_signature(raw_body: bytes, header: Optional[str], secret: str) -> bool:
+    """Best-effort HMAC-SHA256 verification of the X-Hub-Signature-256 header."""
+    if not secret or not header:
+        return True  # Signature check skipped when app secret is not configured.
+    if not header.startswith("sha256="):
+        return False
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header.split("=", 1)[1])
+
+
+@api.get("/webhooks/whatsapp", response_class=PlainTextResponse)
+async def whatsapp_verify(request: Request) -> Response:
+    """Meta subscription handshake. Echoes hub.challenge when the token matches."""
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge", "")
+    expected = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+    if mode == "subscribe" and expected and token and hmac.compare_digest(token, expected):
+        return PlainTextResponse(challenge, status_code=200)
+    return PlainTextResponse("forbidden", status_code=403)
+
+
+@api.post("/webhooks/whatsapp")
+async def whatsapp_events(request: Request) -> Dict[str, Any]:
+    """Receive Meta WhatsApp webhook events. Always returns 200 quickly.
+
+    Access tokens are never logged or echoed back.
+    """
+    raw = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
+    app_secret = os.environ.get("WHATSAPP_APP_SECRET", "")
+    valid_sig = _verify_signature(raw, signature, app_secret)
+
+    try:
+        payload = await request.json() if raw else {}
+    except Exception:
+        payload = {}
+
+    event_record = {
+        "id": "whe_" + _secrets.token_hex(6),
+        "signature_valid": valid_sig,
+        "payload": payload,
+        "received_at": now_utc(),
+    }
+    try:
+        await db.webhook_events.insert_one(event_record)
+    except Exception:
+        logger.exception("whatsapp.webhook_persist_failed")
+
+    processed = {"statuses": 0, "messages": 0}
+    if valid_sig and isinstance(payload, dict) and payload.get("object") == "whatsapp_business_account":
+        for entry in payload.get("entry", []) or []:
+            for change in entry.get("changes", []) or []:
+                value = change.get("value") or {}
+                for status in value.get("statuses", []) or []:
+                    updated = await _apply_status_update(status)
+                    if updated:
+                        processed["statuses"] += 1
+                for message in value.get("messages", []) or []:
+                    await _record_inbound_message(message, value.get("metadata"))
+                    processed["messages"] += 1
+
+    logger.info("whatsapp.webhook received signature_valid=%s statuses=%s messages=%s",
+                valid_sig, processed["statuses"], processed["messages"])
+    return {"status": "received"}
+
+
+async def _apply_status_update(status: Dict[str, Any]) -> bool:
+    """Update the notification identified by provider_message_id."""
+    message_id = status.get("id")
+    kind = (status.get("status") or "").lower()
+    mapped = _STATUS_MAP.get(kind)
+    if not message_id or not mapped:
+        return False
+    updates: Dict[str, Any] = {"status": mapped, "updated_at": now_utc()}
+    if mapped == "DELIVERED" or mapped == "READ":
+        updates["sent_at"] = updates.get("sent_at") or now_utc()
+    if mapped == "FAILED":
+        errors = status.get("errors") or []
+        updates["failed_at"] = now_utc()
+        updates["error_message"] = (errors[0].get("title") if errors else "Provider reported failure")
+    result = await db.notifications.update_one({"provider_message_id": message_id}, {"$set": updates})
+    return bool(result.modified_count)
+
+
+async def _record_inbound_message(message: Dict[str, Any], meta: Optional[Dict[str, Any]]) -> None:
+    """Persist inbound WhatsApp messages for admin review. No token echoed."""
+    try:
+        await db.inbound_messages.insert_one({
+            "id": "inm_" + _secrets.token_hex(6),
+            "wa_message_id": message.get("id"),
+            "from": message.get("from"),
+            "type": message.get("type"),
+            "text": (message.get("text") or {}).get("body"),
+            "timestamp": message.get("timestamp"),
+            "phone_number_id": (meta or {}).get("phone_number_id"),
+            "received_at": now_utc(),
+        })
+    except Exception:
+        logger.exception("whatsapp.inbound_persist_failed")
 
 
 # =====================================================================

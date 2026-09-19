@@ -10,6 +10,7 @@ Composition:
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 
@@ -20,6 +21,22 @@ from core import client, ensure_indexes, logger
 from routers import api
 from scheduler import shutdown_scheduler, start_scheduler
 from seed import seed
+
+
+class _RedactVerifyToken(logging.Filter):
+    """Uvicorn access log includes the raw query string; redact hub.verify_token."""
+
+    _pattern = re.compile(r"(hub\.verify_token=)[^&\s\"']+", re.IGNORECASE)
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+        if record.args:
+            record.args = tuple(self._pattern.sub(r"\1[REDACTED]", str(arg)) if isinstance(arg, str) else arg for arg in record.args)
+        if isinstance(record.msg, str):
+            record.msg = self._pattern.sub(r"\1[REDACTED]", record.msg)
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactVerifyToken())
 
 app = FastAPI(title="TitanGym OS API", version="1.0.0")
 app.include_router(api)

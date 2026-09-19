@@ -164,6 +164,9 @@ async def ensure_indexes() -> None:
     await db.memberships.create_index([("member_id", 1), ("created_at", -1)])
     await db.audit_logs.create_index([("created_at", -1)])
     await db.audit_logs.create_index([("entity_type", 1), ("entity_id", 1)])
+    await db.webhook_events.create_index([("received_at", -1)])
+    await db.inbound_messages.create_index([("received_at", -1)])
+    await db.inbound_messages.create_index("wa_message_id", unique=True, sparse=True)
 
 
 __all__ = [

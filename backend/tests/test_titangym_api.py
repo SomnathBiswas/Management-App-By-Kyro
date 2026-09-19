@@ -156,3 +156,23 @@ def test_lifecycle_endpoint_is_idempotent_safe():
     second = session.post(f"{BASE_URL}/api/jobs/run")
     assert first.status_code == 200 and second.status_code == 200
     assert second.json()["changed"] == {"expiring": 0, "grace_started": 0, "cancelled": 0, "deleted": 0}
+
+
+def test_whatsapp_webhook_get_rejects_when_token_not_configured():
+    # Verify token is empty in shipped .env, so subscribe must fail with 403.
+    response = requests.get(f"{BASE_URL}/api/webhooks/whatsapp", params={
+        "hub.mode": "subscribe", "hub.verify_token": "anything", "hub.challenge": "abc",
+    })
+    assert response.status_code == 403
+
+
+def test_whatsapp_webhook_post_always_returns_200():
+    ok = requests.post(f"{BASE_URL}/api/webhooks/whatsapp", json={"object": "whatsapp_business_account", "entry": []})
+    assert ok.status_code == 200
+    assert ok.json() == {"status": "received"}
+    # Malformed body must still return 200 to avoid Meta re-delivery loop.
+    malformed = requests.post(f"{BASE_URL}/api/webhooks/whatsapp", data="{{not-json", headers={"Content-Type": "application/json"})
+    assert malformed.status_code == 200
+    # Response must never leak sensitive header names either.
+    assert "WHATSAPP_ACCESS_TOKEN" not in ok.text
+    assert "verify_token" not in ok.text
