@@ -11,15 +11,6 @@ class LoginInput(BaseModel):
     password: str
 
 
-class OtpRequestInput(BaseModel):
-    phone: str = Field(min_length=6, max_length=20)
-
-
-class OtpVerifyInput(BaseModel):
-    phone: str = Field(min_length=6, max_length=20)
-    otp: str = Field(min_length=4, max_length=8)
-
-
 class MemberInput(BaseModel):
     model_config = ConfigDict(extra="ignore")
     full_name: str = Field(min_length=2, max_length=80)
@@ -31,7 +22,7 @@ class MemberInput(BaseModel):
     payment_status: str = "PAID"
     payment_method: str = "UPI"
     notes: str = ""
-    photo_url: Optional[str] = None
+    photo_key: Optional[str] = None
 
 
 class MemberUpdateInput(BaseModel):
@@ -40,7 +31,7 @@ class MemberUpdateInput(BaseModel):
     phone: Optional[str] = Field(default=None, min_length=6, max_length=20)
     address: Optional[str] = None
     notes: Optional[str] = None
-    photo_url: Optional[str] = None
+    photo_key: Optional[str] = None
 
 
 class RenewInput(BaseModel):

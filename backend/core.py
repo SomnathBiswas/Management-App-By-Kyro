@@ -29,7 +29,7 @@ GYM_TZ_NAME = os.environ.get("GYM_TIMEZONE", "Asia/Kolkata")
 GYM_TZ = ZoneInfo(GYM_TZ_NAME)
 
 WHATSAPP_ENABLED = bool(os.environ.get("WHATSAPP_ACCESS_TOKEN") and os.environ.get("WHATSAPP_PHONE_NUMBER_ID"))
-STORAGE_ENABLED = bool(os.environ.get("S3_ACCESS_KEY_ID") and os.environ.get("S3_BUCKET_NAME"))
+STORAGE_ENABLED = bool(os.environ.get("S3_ACCESS_KEY_ID") and os.environ.get("S3_BUCKET_NAME") and os.environ.get("S3_ENDPOINT"))
 OTP_DEV_MODE = os.environ.get("OTP_DEV_MODE", "1") == "1"
 
 client: AsyncIOMotorClient = AsyncIOMotorClient(MONGO_URL)
@@ -144,24 +144,6 @@ async def current_user(request: Request) -> Dict[str, Any]:
     return user
 
 
-async def current_member(request: Request) -> Dict[str, Any]:
-    token = request.cookies.get("member_token")
-    if not token:
-        raise HTTPException(401, "Member login required")
-    try:
-        payload = decode_token(token)
-    except jwt.PyJWTError as exc:
-        raise HTTPException(401, "Invalid member session") from exc
-    if payload.get("role") != "MEMBER":
-        raise HTTPException(403, "Member access required")
-    member = await db.members.find_one({"id": payload["sub"]}, {"_id": 0})
-    if not member:
-        raise HTTPException(404, "Member record not found")
-    if member.get("status") == "PERMANENTLY_DELETED":
-        raise HTTPException(410, "This membership record has been erased")
-    return member
-
-
 async def ensure_indexes() -> None:
     """Create indexes needed for correctness and query performance."""
     await db.users.create_index("email", unique=True)
@@ -182,7 +164,6 @@ async def ensure_indexes() -> None:
     await db.memberships.create_index([("member_id", 1), ("created_at", -1)])
     await db.audit_logs.create_index([("created_at", -1)])
     await db.audit_logs.create_index([("entity_type", 1), ("entity_id", 1)])
-    await db.otp.create_index("phone", unique=True)
 
 
 __all__ = [
@@ -207,6 +188,5 @@ __all__ = [
     "issue_token",
     "decode_token",
     "current_user",
-    "current_member",
     "ensure_indexes",
 ]

@@ -55,6 +55,7 @@ async def seed() -> None:
                 "phone": phone,
                 "address": "Bengaluru",
                 "photo_url": None,
+                "photo_key": None,
                 "plan_id": plan_id,
                 "start_date": start.isoformat(),
                 "expiry_date": expiry.isoformat(),

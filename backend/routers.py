@@ -6,16 +6,14 @@ import io
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 
 from core import (
-    OTP_DEV_MODE,
     STORAGE_ENABLED,
     WHATSAPP_ENABLED,
     aware_utc,
     clean,
-    current_member,
     current_user,
     db,
     hash_identifier,
@@ -28,8 +26,6 @@ from schemas import (
     LoginInput,
     MemberInput,
     MemberUpdateInput,
-    OtpRequestInput,
-    OtpVerifyInput,
     PaymentInput,
     PlanInput,
     PlanUpdateInput,
@@ -43,8 +39,19 @@ from services import (
     NotificationService,
     PaymentService,
 )
+from storage import delete_object, presigned_url, upload_member_photo
 
 api = APIRouter(prefix="/api")
+
+
+def _attach_photo(member: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Inject a fresh presigned URL for the member's photo (if any)."""
+    if not member:
+        return member
+    key = member.get("photo_key")
+    if key:
+        member["photo_url"] = presigned_url(key)
+    return member
 
 # =====================================================================
 # Health
@@ -57,7 +64,6 @@ async def root() -> Dict[str, Any]:
         "providers": {
             "whatsapp": "enabled" if WHATSAPP_ENABLED else "disabled",
             "storage": "enabled" if STORAGE_ENABLED else "disabled",
-            "otp": "dev-mode" if OTP_DEV_MODE else "provider",
         },
     }
 
@@ -116,66 +122,6 @@ async def me(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
 
 
 # =====================================================================
-# Member OTP auth (phone + OTP)
-# =====================================================================
-@api.post("/auth/member/request-otp")
-async def request_otp(payload: OtpRequestInput) -> Dict[str, Any]:
-    phone = payload.phone.strip()
-    member = await db.members.find_one({"phone": phone}, {"_id": 0})
-    if not member:
-        raise HTTPException(404, "No member found for this phone number")
-    if member.get("status") == "PERMANENTLY_DELETED":
-        raise HTTPException(410, "This membership record has been erased")
-    otp_value = "123456" if OTP_DEV_MODE else "".join(__import__("secrets").choice("0123456789") for _ in range(6))
-    await db.otp.update_one(
-        {"phone": phone},
-        {"$set": {
-            "otp": otp_value,
-            "expires_at": now_utc() + timedelta(minutes=5),
-            "attempts": 0,
-            "issued_at": now_utc(),
-        }},
-        upsert=True,
-    )
-    response: Dict[str, Any] = {"success": True, "message": "OTP sent"}
-    if OTP_DEV_MODE:
-        response["development_otp"] = otp_value
-    return response
-
-
-@api.post("/auth/member/verify-otp")
-async def verify_otp(payload: OtpVerifyInput, response: Response) -> Dict[str, Any]:
-    record = await db.otp.find_one({"phone": payload.phone})
-    if not record:
-        raise HTTPException(401, "Invalid or expired OTP")
-    expires_at = aware_utc(record.get("expires_at"))
-    attempts = int(record.get("attempts", 0))
-    if attempts >= 5:
-        raise HTTPException(429, "Too many OTP attempts. Request a new code")
-    if record.get("otp") != payload.otp or expires_at < now_utc():
-        await db.otp.update_one({"phone": payload.phone}, {"$inc": {"attempts": 1}})
-        raise HTTPException(401, "Invalid or expired OTP")
-    member = await db.members.find_one({"phone": payload.phone}, {"_id": 0})
-    if not member:
-        raise HTTPException(404, "Member record not found")
-    await db.otp.delete_one({"phone": payload.phone})
-    response.set_cookie(
-        "member_token",
-        issue_token(member["id"], "MEMBER"),
-        httponly=True,
-        samesite="lax",
-        max_age=43200,
-    )
-    return {"success": True, "member": clean(member)}
-
-
-@api.post("/auth/member/logout")
-async def member_logout(response: Response) -> Dict[str, bool]:
-    response.delete_cookie("member_token")
-    return {"success": True}
-
-
-# =====================================================================
 # Dashboard
 # =====================================================================
 @api.get("/dashboard")
@@ -188,7 +134,7 @@ async def dashboard(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, A
     plans = {p["id"]: p["name"] for p in await db.plans.find({}, {"_id": 0}).to_list(200)}
     enriched = []
     for m in members:
-        row = clean(m)
+        row = clean(_attach_photo(m))
         row["plan_name"] = plans.get(m.get("plan_id"), "Custom plan")
         enriched.append(row)
     return {
@@ -230,7 +176,7 @@ async def list_members(
         ]
     members = await db.members.find(query, {"_id": 0}).sort("expiry_date", 1).to_list(limit)
     plans = {p["id"]: p["name"] for p in await db.plans.find({}, {"_id": 0}).to_list(200)}
-    return [{**clean(m), "plan_name": plans.get(m.get("plan_id"), "Custom plan")} for m in members]
+    return [{**clean(_attach_photo(m)), "plan_name": plans.get(m.get("plan_id"), "Custom plan")} for m in members]
 
 
 @api.post("/members")
@@ -251,7 +197,7 @@ async def create_member(payload: MemberInput, user: Dict[str, Any] = Depends(cur
         plan=plan,
         actor_id=user["id"],
     )
-    return clean(member)
+    return clean(_attach_photo(member))
 
 
 @api.get("/members/{member_id}")
@@ -265,7 +211,7 @@ async def get_member(member_id: str, user: Dict[str, Any] = Depends(current_user
     payments = await PaymentService.list_for_member(member_id)
     audit = await db.audit_logs.find({"entity_id": member_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return {
-        "member": clean(member),
+        "member": clean(_attach_photo(member)),
         "plan": clean(plan),
         "history": [clean(x) for x in history],
         "notifications": [clean(x) for x in notifications],
@@ -281,7 +227,7 @@ async def update_member(member_id: str, payload: MemberUpdateInput, user: Dict[s
         raise HTTPException(404, "Member not found")
     changes = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
     if not changes:
-        return clean(member)
+        return clean(_attach_photo(member))
     changes["updated_at"] = now_utc()
     await db.members.update_one({"id": member_id}, {"$set": changes})
     await AuditService.record(
@@ -293,7 +239,7 @@ async def update_member(member_id: str, payload: MemberUpdateInput, user: Dict[s
         metadata={"fields": list(changes.keys())},
     )
     updated = await db.members.find_one({"id": member_id}, {"_id": 0})
-    return clean(updated)
+    return clean(_attach_photo(updated))
 
 
 @api.post("/members/{member_id}/renew")
@@ -406,6 +352,50 @@ async def update_plan(plan_id: str, payload: PlanUpdateInput, user: Dict[str, An
             metadata={"fields": list(changes.keys())},
         )
     return clean(await db.plans.find_one({"id": plan_id}, {"_id": 0}))
+
+
+@api.delete("/plans/{plan_id}")
+async def delete_plan(plan_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    plan = await db.plans.find_one({"id": plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+    in_use = await db.members.count_documents({"plan_id": plan_id, "status": {"$nin": ["CANCELLED", "PERMANENTLY_DELETED"]}})
+    if in_use:
+        # Soft-disable when members still use the plan so history stays intact.
+        await db.plans.update_one({"id": plan_id}, {"$set": {"active": False}})
+        await AuditService.record(
+            action="PLAN_DISABLED",
+            entity_type="PLAN",
+            entity_id=plan_id,
+            actor_id=user["id"],
+            actor_role=user.get("role", "ADMIN"),
+            metadata={"reason": "members_active", "count": in_use},
+        )
+        return {"success": True, "deleted": False, "disabled": True, "active_members": in_use}
+    await db.plans.delete_one({"id": plan_id})
+    await AuditService.record(
+        action="PLAN_DELETED",
+        entity_type="PLAN",
+        entity_id=plan_id,
+        actor_id=user["id"],
+        actor_role=user.get("role", "ADMIN"),
+    )
+    return {"success": True, "deleted": True}
+
+
+# =====================================================================
+# Uploads (Cloudflare R2)
+# =====================================================================
+@api.post("/uploads/member-photo")
+async def upload_photo(file: UploadFile = File(...), user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    if not STORAGE_ENABLED:
+        raise HTTPException(503, "Photo storage is not configured")
+    data = await file.read()
+    try:
+        key = upload_member_photo(data=data, filename=file.filename or "photo.jpg", content_type=file.content_type)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"success": True, "photo_key": key, "photo_url": presigned_url(key)}
 
 
 # =====================================================================
@@ -560,31 +550,4 @@ async def run_jobs(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, An
         },
         "retries_processed": result["retries_processed"],
         "provider": "WhatsApp disabled until credentials are configured" if not WHATSAPP_ENABLED else "WhatsApp enabled",
-    }
-
-
-# =====================================================================
-# Member portal
-# =====================================================================
-@api.get("/member/me")
-async def member_me(member: Dict[str, Any] = Depends(current_member)) -> Dict[str, Any]:
-    plan = await db.plans.find_one({"id": member.get("plan_id")}, {"_id": 0})
-    history = await db.memberships.find({"member_id": member["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    payments = await PaymentService.list_for_member(member["id"])
-    settings = await db.settings.find_one({"id": "settings_default"}, {"_id": 0}) or {}
-    today = today_ist()
-    expiry = member.get("expiry_date")
-    days_remaining = None
-    if expiry:
-        try:
-            days_remaining = (date.fromisoformat(expiry) - today).days
-        except ValueError:
-            days_remaining = None
-    return {
-        "member": clean(member),
-        "plan": clean(plan),
-        "gym": {"name": settings.get("gym_name", "TitanGym"), "phone": settings.get("gym_phone"), "address": settings.get("gym_address")},
-        "history": [clean(item) for item in history],
-        "payments": [clean(p) for p in payments],
-        "days_remaining": days_remaining,
     }

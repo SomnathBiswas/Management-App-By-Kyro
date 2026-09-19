@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { Activity, ArrowUpRight, Bell, CalendarDays, Check, ChevronRight, CircleDollarSign, ClipboardList, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Plus, RefreshCw, Search, Settings, ShieldCheck, Users, Wallet, X } from "lucide-react";
+import { Activity, ArrowUpRight, Bell, CalendarDays, Check, ChevronRight, CircleDollarSign, ClipboardList, Edit3, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Plus, RefreshCw, Search, Settings, ShieldCheck, Trash2, Upload, Users, Wallet, X } from "lucide-react";
 import "@/App.css";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -13,9 +13,10 @@ const initials = (name) => (name || "?").split(" ").map((x) => x[0]).join("").sl
 
 function StatusPill({ status }) { const [label, tone] = statusMeta[status] || [status, "neutral"]; return <span data-testid={`status-${String(status).toLowerCase()}`} className={`status-pill ${tone}`}><i />{label}</span>; }
 function Empty({ text }) { return <div data-testid="empty-state" className="empty-state">{text}</div>; }
+function MemberAvatar({ name, photoUrl, size = 35 }) { return photoUrl ? <img data-testid="member-avatar-img" className="member-avatar photo" src={photoUrl} alt={name} style={{ width: size, height: size }} /> : <div className="member-avatar" style={{ width: size, height: size, fontSize: size < 40 ? 10 : 13 }}>{initials(name)}</div>; }
 
 /* -------- Admin login -------- */
-function Login({ onLogin, onMember }) {
+function Login({ onLogin }) {
   const [email, setEmail] = useState("admin@titangym.in");
   const [password, setPassword] = useState("Titan@123");
   const [error, setError] = useState("");
@@ -38,101 +39,11 @@ function Login({ onLogin, onMember }) {
         <button data-testid="login-submit-button" className="primary-button wide" disabled={loading}>{loading ? "Signing in…" : "Enter TitanGym"}<ArrowUpRight size={17} /></button>
       </form>
       <div className="login-foot"><ShieldCheck size={15} /> Secure staff session</div>
-      <button data-testid="open-member-login-button" className="text-button member-switch" onClick={onMember}>I'm a member — open member portal <ArrowUpRight size={14} /></button>
     </div>
   </main>;
 }
 
-/* -------- Member OTP flow -------- */
-function MemberLogin({ onMemberLogin, onBack }) {
-  const [phone, setPhone] = useState("+91 98111 22031");
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState("phone");
-  const [error, setError] = useState("");
-  const [devOtp, setDevOtp] = useState("");
-  const [loading, setLoading] = useState(false);
-  const requestOtp = async (e) => {
-    e.preventDefault(); setLoading(true); setError("");
-    try { const r = await api.post("/auth/member/request-otp", { phone }); setStep("otp"); if (r.data.development_otp) setDevOtp(r.data.development_otp); }
-    catch (err) { setError(err.response?.data?.detail || "Could not send OTP"); }
-    finally { setLoading(false); }
-  };
-  const verifyOtp = async (e) => {
-    e.preventDefault(); setLoading(true); setError("");
-    try { const r = await api.post("/auth/member/verify-otp", { phone, otp }); onMemberLogin(r.data.member); }
-    catch (err) { setError(err.response?.data?.detail || "Invalid or expired OTP"); }
-    finally { setLoading(false); }
-  };
-  return <main className="member-login">
-    <div className="member-login-panel">
-      <div className="member-login-brand">TITANGYM <span>OS</span></div>
-      <p className="eyebrow">MEMBER PORTAL</p>
-      <h2>Your training,<br /><em>your account.</em></h2>
-      <p className="muted">Sign in with your registered phone to view your membership.</p>
-      {step === "phone" ? (
-        <form onSubmit={requestOtp} className="login-form">
-          <label>Registered phone<input data-testid="member-phone-input" value={phone} onChange={(e) => setPhone(e.target.value)} required /></label>
-          {error && <div data-testid="member-login-error" className="form-error">{error}</div>}
-          <button data-testid="member-request-otp-button" className="primary-button wide" disabled={loading}>{loading ? "Sending…" : "Send OTP"}<ArrowUpRight size={17} /></button>
-        </form>
-      ) : (
-        <form onSubmit={verifyOtp} className="login-form">
-          <label>One-time password<input data-testid="member-otp-input" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} required autoFocus /></label>
-          {devOtp && <div className="provider-note" data-testid="member-dev-otp-hint"><MessageSquare size={14} /> Development OTP: <b>{devOtp}</b></div>}
-          {error && <div data-testid="member-login-error" className="form-error">{error}</div>}
-          <button data-testid="member-verify-otp-button" className="primary-button wide" disabled={loading}>{loading ? "Verifying…" : "Verify & continue"}<ArrowUpRight size={17} /></button>
-          <button data-testid="member-change-phone-button" type="button" className="text-button" onClick={() => { setStep("phone"); setOtp(""); setError(""); }}>Use a different phone</button>
-        </form>
-      )}
-      <button data-testid="back-to-admin-login-button" className="text-button member-switch" onClick={onBack}>Back to staff sign-in</button>
-    </div>
-  </main>;
-}
-
-/* -------- Member portal (real data) -------- */
-function MemberPortal({ onExit }) {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    api.get("/member/me")
-      .then((r) => setData(r.data))
-      .catch((err) => { if (err.response?.status === 401 || err.response?.status === 404) onExit(); else setError(err.response?.data?.detail || "Could not load your membership"); });
-  }, [onExit]);
-  const logout = async () => { await api.post("/auth/member/logout").catch(() => {}); onExit(); };
-  if (error) return <main className="member-portal"><div className="member-wrap"><Empty text={error} /></div></main>;
-  if (!data) return <main className="member-portal"><div className="member-wrap"><Empty text="Loading your membership…" /></div></main>;
-  const { member, plan, gym, history, payments, days_remaining } = data;
-  const paid = payments?.reduce((sum, p) => p.status === "PAID" ? sum + Number(p.amount || 0) : sum, 0) || 0;
-  return <main className="member-portal">
-    <div className="member-nav"><div className="brand-mark small">T<span>G</span></div><button data-testid="member-logout-button" className="ghost-button" onClick={logout}><LogOut size={15} /> Sign out</button></div>
-    <div className="member-wrap">
-      <div className="member-welcome"><p className="eyebrow">{(gym?.name || "TITANGYM").toUpperCase()}</p><h1>Your training<br /><em>doesn't stop.</em></h1><p>Hello {member.full_name?.split(" ")[0]}, here's where your membership stands today.</p></div>
-      <section data-testid="member-status-card" className="member-status-card">
-        <div className="status-card-top"><span className="eyebrow">CURRENT MEMBERSHIP</span><StatusPill status={member.status} /></div>
-        <div className="member-profile"><div className="profile-photo">{initials(member.full_name)}</div><div><h2 data-testid="member-full-name">{member.full_name}</h2><span>{plan?.name || "Custom plan"}</span></div></div>
-        <div className="member-dates">
-          <div><small>Start</small><strong data-testid="member-start-date">{dateLabel(member.start_date)}</strong></div>
-          <div><small>Expires</small><strong data-testid="member-expiry-date">{dateLabel(member.expiry_date)}</strong></div>
-          <div><small>Days remaining</small><strong data-testid="member-days-remaining">{days_remaining ?? "—"}</strong></div>
-        </div>
-        <div className="member-cta-row">
-          <div className="paid-summary"><small>Paid to date</small><strong>{money(paid)}</strong></div>
-          <span className="renewal-note" data-testid="member-renewal-note">Contact the gym to renew your membership</span>
-        </div>
-      </section>
-      <div className="member-bottom">
-        <article className="panel"><p className="eyebrow">MEMBERSHIP HISTORY</p><h3>Your journey so far</h3>
-          <div className="timeline">{history?.length ? history.map((h) => <div key={h.id} data-testid={`member-history-${h.id}`}><i /><span><strong>{h.type?.replaceAll("_", " ")}</strong><small>{dateLabel(h.created_at)} · {h.plan_name} · {money(h.amount)}</small></span></div>) : <Empty text="History will appear here." />}</div>
-        </article>
-        <article className="panel"><p className="eyebrow">RECENT PAYMENTS</p><h3>Payment history</h3>
-          <div className="timeline">{payments?.length ? payments.slice(0, 5).map((p) => <div key={p.id} data-testid={`member-payment-${p.id}`}><i /><span><strong>{money(p.amount)} · {p.method}</strong><small>{dateLabel(p.created_at)} · {p.status}</small></span></div>) : <Empty text="No payments recorded yet." />}</div>
-        </article>
-      </div>
-    </div>
-  </main>;
-}
-
-/* -------- Admin app -------- */
+/* -------- Sidebar / Topbar -------- */
 function Sidebar({ page, setPage, onLogout, collapsed, setCollapsed, notificationCount }) {
   const links = [
     ["overview", "Overview", LayoutDashboard],
@@ -155,11 +66,11 @@ function Sidebar({ page, setPage, onLogout, collapsed, setCollapsed, notificatio
   </aside>;
 }
 
-function Topbar({ page, onMember, onRunJobs, running }) {
+function Topbar({ page, onRunJobs, running }) {
   const titles = {
     overview: ["Good morning, Arjun", "Here's the pulse of your floor today."],
-    members: ["Members", "Manage the people who power your gym."],
-    plans: ["Membership plans", "Shape the offers that keep members moving."],
+    members: ["Members", "Register, edit and manage every member here."],
+    plans: ["Membership plans", "Create, edit or retire the plans you sell."],
     payments: ["Payments", "Every rupee, accounted for."],
     reports: ["Reports", "A clearer view of momentum and revenue."],
     notifications: ["Notification centre", "Every message, accounted for."],
@@ -170,7 +81,6 @@ function Topbar({ page, onMember, onRunJobs, running }) {
     <div><p className="eyebrow">TITANGYM OS · ADMIN</p><h1 data-testid="page-title">{titles[page][0]}</h1><p className="muted">{titles[page][1]}</p></div>
     <div className="top-actions">
       <button data-testid="run-lifecycle-button" className="ghost-button" onClick={onRunJobs} disabled={running}><RefreshCw size={15} className={running ? "spin" : ""} /> {running ? "Running…" : "Run lifecycle"}</button>
-      <button data-testid="member-portal-button" className="ghost-button" onClick={onMember}><Activity size={16} /> Member portal</button>
       <div data-testid="admin-avatar" className="avatar">AM</div>
     </div>
   </header>;
@@ -178,6 +88,7 @@ function Topbar({ page, onMember, onRunJobs, running }) {
 
 function MetricCard({ label, value, note, tone, icon: Icon }) { return <article data-testid={`metric-${label.toLowerCase().replaceAll(" ", "-")}`} className={`metric-card ${tone || ""}`}><div className="metric-head"><span>{label}</span><Icon size={17} /></div><strong>{value}</strong><small>{note}</small></article>; }
 
+/* -------- Overview -------- */
 function Overview({ data, setPage }) {
   const members = data?.members || [];
   const expiring = members.filter((m) => m.status === "EXPIRING_SOON");
@@ -205,8 +116,38 @@ function Overview({ data, setPage }) {
   </div>;
 }
 
-function MemberRow({ member, action }) { return <div data-testid={`member-row-${member.id}`} className="member-row"><div className="member-avatar">{initials(member.full_name)}</div><div className="member-row-main"><strong>{member.full_name}</strong><span>{member.phone}</span></div><div className="member-expiry"><small>{action === "Renew" ? "Expires" : "Grace ends"}</small><strong>{dateLabel(action === "Renew" ? member.expiry_date : member.grace_period_end)}</strong></div></div>; }
+function MemberRow({ member, action }) { return <div data-testid={`member-row-${member.id}`} className="member-row"><MemberAvatar name={member.full_name} photoUrl={member.photo_url} /><div className="member-row-main"><strong>{member.full_name}</strong><span>{member.phone}</span></div><div className="member-expiry"><small>{action === "Renew" ? "Expires" : "Grace ends"}</small><strong>{dateLabel(action === "Renew" ? member.expiry_date : member.grace_period_end)}</strong></div></div>; }
 
+/* -------- Photo picker -------- */
+function PhotoField({ photoKey, photoUrl, onChange }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const pick = () => fileRef.current?.click();
+  const handle = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setError("");
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await api.post("/uploads/member-photo", form, { headers: { "Content-Type": "multipart/form-data" } });
+      onChange({ photo_key: res.data.photo_key, photo_url: res.data.photo_url });
+    } catch (err) { setError(err.response?.data?.detail || "Upload failed"); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+  };
+  return <div className="photo-field">
+    {photoUrl ? <img data-testid="photo-preview" className="photo-preview" src={photoUrl} alt="Member" /> : <div className="photo-empty" data-testid="photo-empty">Photo</div>}
+    <div className="photo-actions">
+      <input ref={fileRef} data-testid="photo-file-input" type="file" accept="image/*" onChange={handle} style={{ display: "none" }} />
+      <button data-testid="upload-photo-button" type="button" className="ghost-button" onClick={pick} disabled={uploading}><Upload size={14} /> {uploading ? "Uploading…" : photoKey ? "Replace photo" : "Upload photo"}</button>
+      {photoKey && <button data-testid="clear-photo-button" type="button" className="text-button" onClick={() => onChange({ photo_key: null, photo_url: null })}>Remove</button>}
+      {error && <span className="form-error" data-testid="photo-error">{error}</span>}
+    </div>
+  </div>;
+}
+
+/* -------- Members -------- */
 function Members({ members, plans, refresh }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
@@ -227,7 +168,7 @@ function Members({ members, plans, refresh }) {
       <div className="table-caption"><div><p className="eyebrow">DIRECTORY</p><h2>All members <span>{filtered.length}</span></h2></div></div>
       <div className="table-scroll"><table><thead><tr><th>Member</th><th>Plan</th><th>Membership window</th><th>Status</th><th>Payment</th><th /></tr></thead>
         <tbody>{filtered.map((m) => <tr data-testid={`member-table-row-${m.id}`} key={m.id}>
-          <td><div className="table-member"><div className="member-avatar">{initials(m.full_name)}</div><div><strong>{m.full_name}</strong><small>{m.phone}</small></div></div></td>
+          <td><div className="table-member"><MemberAvatar name={m.full_name} photoUrl={m.photo_url} /><div><strong>{m.full_name}</strong><small>{m.phone}</small></div></div></td>
           <td>{m.plan_name || plans.find((p) => p.id === m.plan_id)?.name || "Custom"}</td>
           <td><strong>{dateLabel(m.start_date)}</strong><small>to {dateLabel(m.expiry_date)}</small></td>
           <td><StatusPill status={m.status} /></td>
@@ -242,10 +183,11 @@ function Members({ members, plans, refresh }) {
 }
 
 function AddMemberModal({ plans, onClose, onSaved }) {
-  const [form, setForm] = useState({ full_name: "", phone: "", address: "", plan_id: plans[0]?.id || "", start_date: new Date().toISOString().slice(0, 10), payment_amount: plans[0]?.price || 0, payment_status: "PAID", payment_method: "UPI", notes: "" });
+  const active = plans.filter((p) => p.active !== false);
+  const [form, setForm] = useState({ full_name: "", phone: "", address: "", plan_id: active[0]?.id || "", start_date: new Date().toISOString().slice(0, 10), payment_amount: active[0]?.price || 0, payment_status: "PAID", payment_method: "UPI", notes: "", photo_key: null, photo_url: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const update = (key, value) => setForm({ ...form, [key]: value });
+  const update = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const submit = async (e) => {
     e.preventDefault(); setSaving(true); setError("");
     try { await api.post("/members", { ...form, payment_amount: Number(form.payment_amount) }); onSaved(); }
@@ -254,18 +196,19 @@ function AddMemberModal({ plans, onClose, onSaved }) {
   };
   return <div className="modal-backdrop"><form data-testid="add-member-modal" className="modal" onSubmit={submit}>
     <div className="modal-head"><div><p className="eyebrow">NEW REGISTRATION</p><h2>Add a member</h2></div><button data-testid="close-add-member-button" type="button" className="icon-button" onClick={onClose}><X size={18} /></button></div>
+    <PhotoField photoKey={form.photo_key} photoUrl={form.photo_url} onChange={({ photo_key, photo_url }) => setForm((f) => ({ ...f, photo_key, photo_url }))} />
     <div className="form-grid">
       <label>Full name<input data-testid="member-full-name-input" required value={form.full_name} onChange={(e) => update("full_name", e.target.value)} /></label>
       <label>Phone number<input data-testid="member-phone-input" required value={form.phone} onChange={(e) => update("phone", e.target.value)} /></label>
       <label>Address<input data-testid="member-address-input" value={form.address} onChange={(e) => update("address", e.target.value)} /></label>
       <label>Start date<input data-testid="member-start-date-input" type="date" required value={form.start_date} onChange={(e) => update("start_date", e.target.value)} /></label>
-      <label>Membership plan<select data-testid="member-plan-select" value={form.plan_id} onChange={(e) => { update("plan_id", e.target.value); update("payment_amount", plans.find((p) => p.id === e.target.value)?.price || 0); }}>{plans.map((p) => <option key={p.id} value={p.id}>{p.name} · {money(p.price)}</option>)}</select></label>
+      <label>Membership plan<select data-testid="member-plan-select" value={form.plan_id} onChange={(e) => { update("plan_id", e.target.value); update("payment_amount", plans.find((p) => p.id === e.target.value)?.price || 0); }}>{active.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label>Payment method<select data-testid="member-payment-method-select" value={form.payment_method} onChange={(e) => update("payment_method", e.target.value)}><option>UPI</option><option>Cash</option><option>Card</option><option>Bank transfer</option></select></label>
       <label>Amount paid<input data-testid="member-payment-amount-input" type="number" value={form.payment_amount} onChange={(e) => update("payment_amount", e.target.value)} /></label>
       <label>Payment status<select data-testid="member-payment-status-select" value={form.payment_status} onChange={(e) => update("payment_status", e.target.value)}><option>PAID</option><option>PENDING</option><option>PARTIAL</option></select></label>
     </div>
     {error && <div data-testid="add-member-error" className="form-error">{error}</div>}
-    <div className="modal-foot"><span className="provider-note"><MessageSquare size={15} /> Welcome message queued · WhatsApp disabled</span><button data-testid="save-member-button" className="primary-button" disabled={saving}>{saving ? "Saving…" : "Create member"}</button></div>
+    <div className="modal-foot"><span className="provider-note"><MessageSquare size={15} /> Welcome WhatsApp queued · enable Meta credentials to auto-send</span><button data-testid="save-member-button" className="primary-button" disabled={saving}>{saving ? "Saving…" : "Create member"}</button></div>
   </form></div>;
 }
 
@@ -273,10 +216,13 @@ function MemberDetail({ detail, plans, onClose, refresh }) {
   const { member, plan, history, notifications, payments, audit } = detail;
   const [tab, setTab] = useState("membership");
   const [showRenew, setShowRenew] = useState(false);
-  const cancel = async () => { if (!window.confirm("Cancel this membership immediately?")) return; await api.post(`/members/${member.id}/cancel`); refresh(); };
+  const cancel = async () => { if (!window.confirm("Cancel this membership immediately? A cancellation WhatsApp will be queued.")) return; await api.post(`/members/${member.id}/cancel`); refresh(); };
   return <div className="modal-backdrop"><div data-testid="member-detail-modal" className="modal detail">
     <div className="modal-head">
-      <div><p className="eyebrow">MEMBER PROFILE</p><h2>{member.full_name}</h2><span className="muted">{member.phone}</span></div>
+      <div className="detail-header">
+        <MemberAvatar name={member.full_name} photoUrl={member.photo_url} size={60} />
+        <div><p className="eyebrow">MEMBER PROFILE</p><h2>{member.full_name}</h2><span className="muted">{member.phone}</span></div>
+      </div>
       <button data-testid="close-detail-button" className="icon-button" onClick={onClose}><X size={18} /></button>
     </div>
     <div className="detail-summary">
@@ -303,7 +249,8 @@ function MemberDetail({ detail, plans, onClose, refresh }) {
 }
 
 function RenewModal({ member, plans, onClose, onSaved }) {
-  const [form, setForm] = useState({ plan_id: member.plan_id || plans[0]?.id, start_date: new Date().toISOString().slice(0, 10), payment_amount: plans.find((p) => p.id === member.plan_id)?.price || 0, payment_method: "UPI", payment_status: "PAID" });
+  const active = plans.filter((p) => p.active !== false);
+  const [form, setForm] = useState({ plan_id: member.plan_id || active[0]?.id, start_date: new Date().toISOString().slice(0, 10), payment_amount: plans.find((p) => p.id === member.plan_id)?.price || 0, payment_method: "UPI", payment_status: "PAID" });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const submit = async (e) => {
@@ -315,7 +262,7 @@ function RenewModal({ member, plans, onClose, onSaved }) {
   return <div className="modal-backdrop"><form data-testid="renew-modal" className="modal compact" onSubmit={submit}>
     <div className="modal-head"><div><p className="eyebrow">RENEWAL</p><h2>Renew {member.full_name}</h2></div><button data-testid="close-renew-button" type="button" className="icon-button" onClick={onClose}><X size={18} /></button></div>
     <div className="form-grid">
-      <label>Plan<select data-testid="renew-plan-select" value={form.plan_id} onChange={(e) => { const p = plans.find((x) => x.id === e.target.value); setForm({ ...form, plan_id: e.target.value, payment_amount: p?.price || 0 }); }}>{plans.map((p) => <option key={p.id} value={p.id}>{p.name} · {money(p.price)}</option>)}</select></label>
+      <label>Plan<select data-testid="renew-plan-select" value={form.plan_id} onChange={(e) => { const p = plans.find((x) => x.id === e.target.value); setForm({ ...form, plan_id: e.target.value, payment_amount: p?.price || 0 }); }}>{active.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label>Start date<input data-testid="renew-start-input" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></label>
       <label>Amount<input data-testid="renew-amount-input" type="number" value={form.payment_amount} onChange={(e) => setForm({ ...form, payment_amount: e.target.value })} /></label>
       <label>Method<select data-testid="renew-method-select" value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}><option>UPI</option><option>Cash</option><option>Card</option><option>Bank transfer</option></select></label>
@@ -325,36 +272,67 @@ function RenewModal({ member, plans, onClose, onSaved }) {
   </form></div>;
 }
 
+/* -------- Plans (edit + delete) -------- */
 function Plans({ plans, refresh }) {
-  const [show, setShow] = useState(false);
+  const [editing, setEditing] = useState(null); // null | "new" | plan object
+  const remove = async (plan) => {
+    if (!window.confirm(`Delete "${plan.name}"? If members are still on this plan it will be disabled instead of deleted.`)) return;
+    try {
+      const res = await api.delete(`/plans/${plan.id}`);
+      const msg = res.data.deleted ? "Plan deleted." : `Plan has ${res.data.active_members} active member(s), so it was disabled instead of deleted.`;
+      window.alert(msg);
+      refresh();
+    } catch (err) { window.alert(err.response?.data?.detail || "Could not delete plan"); }
+  };
+  const toggle = async (plan) => { try { await api.patch(`/plans/${plan.id}`, { active: !plan.active }); refresh(); } catch (err) { window.alert(err.response?.data?.detail || "Could not update plan"); } };
   return <div className="page-content">
-    <div className="toolbar"><div><p className="eyebrow">OFFER ARCHITECTURE</p><h2 className="section-title">Plans that earn commitment.</h2></div><button data-testid="create-plan-button" className="primary-button" onClick={() => setShow(true)}><Plus size={17} /> Create plan</button></div>
-    <div className="plan-grid">{plans.map((p, i) => <article data-testid={`plan-card-${p.id}`} className="plan-card" key={p.id}><div className="plan-index">0{i + 1}</div><div className="plan-icon"><Activity size={20} /></div><h3>{p.name}</h3><p>{p.description}</p><strong>{money(p.price)}<small> / {p.duration_months} {p.duration_months === 1 ? "month" : "months"}</small></strong><div className="plan-footer"><span className="active-label"><i /> {p.active ? "Active" : "Inactive"}</span></div></article>)}</div>
-    {show && <PlanModal onClose={() => setShow(false)} onSaved={() => { setShow(false); refresh(); }} />}
+    <div className="toolbar"><div><p className="eyebrow">OFFER ARCHITECTURE</p><h2 className="section-title">Plans that earn commitment.</h2></div><button data-testid="create-plan-button" className="primary-button" onClick={() => setEditing("new")}><Plus size={17} /> Create plan</button></div>
+    <div className="plan-grid">{plans.map((p, i) => <article data-testid={`plan-card-${p.id}`} className={`plan-card ${p.active === false ? "inactive" : ""}`} key={p.id}>
+      <div className="plan-index">0{i + 1}</div>
+      <div className="plan-icon"><Activity size={20} /></div>
+      <h3>{p.name}</h3>
+      <p>{p.description}</p>
+      <strong>{money(p.price)}<small> / {p.duration_months} {p.duration_months === 1 ? "month" : "months"}</small></strong>
+      <div className="plan-footer">
+        <span className={`active-label ${p.active === false ? "off" : ""}`}><i /> {p.active === false ? "Inactive" : "Active"}</span>
+        <div className="plan-buttons">
+          <button data-testid={`toggle-plan-${p.id}-button`} type="button" className="icon-button" title={p.active === false ? "Activate" : "Deactivate"} onClick={() => toggle(p)}><Check size={15} /></button>
+          <button data-testid={`edit-plan-${p.id}-button`} type="button" className="icon-button" title="Edit" onClick={() => setEditing(p)}><Edit3 size={15} /></button>
+          <button data-testid={`delete-plan-${p.id}-button`} type="button" className="icon-button danger" title="Delete" onClick={() => remove(p)}><Trash2 size={15} /></button>
+        </div>
+      </div>
+    </article>)}</div>
+    {editing && <PlanModal plan={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh(); }} />}
   </div>;
 }
 
-function PlanModal({ onClose, onSaved }) {
-  const [form, setForm] = useState({ name: "", duration_months: 1, price: 0, description: "" });
+function PlanModal({ plan, onClose, onSaved }) {
+  const isEdit = Boolean(plan);
+  const [form, setForm] = useState(plan ? { name: plan.name, duration_months: plan.duration_months, price: plan.price, description: plan.description || "", active: plan.active !== false } : { name: "", duration_months: 1, price: 0, description: "", active: true });
   const [error, setError] = useState("");
   const submit = async (e) => {
-    e.preventDefault();
-    try { await api.post("/plans", { ...form, duration_months: Number(form.duration_months), price: Number(form.price) }); onSaved(); }
-    catch (err) { setError(err.response?.data?.detail || "Could not save plan"); }
+    e.preventDefault(); setError("");
+    try {
+      if (isEdit) await api.patch(`/plans/${plan.id}`, { ...form, duration_months: Number(form.duration_months), price: Number(form.price) });
+      else await api.post("/plans", { ...form, duration_months: Number(form.duration_months), price: Number(form.price) });
+      onSaved();
+    } catch (err) { setError(err.response?.data?.detail || "Could not save plan"); }
   };
-  return <div className="modal-backdrop"><form data-testid="create-plan-modal" className="modal compact" onSubmit={submit}>
-    <div className="modal-head"><div><p className="eyebrow">PLAN BUILDER</p><h2>Create a plan</h2></div><button data-testid="close-plan-modal-button" type="button" className="icon-button" onClick={onClose}><X size={18} /></button></div>
+  return <div className="modal-backdrop"><form data-testid={isEdit ? "edit-plan-modal" : "create-plan-modal"} className="modal compact" onSubmit={submit}>
+    <div className="modal-head"><div><p className="eyebrow">{isEdit ? "PLAN EDITOR" : "PLAN BUILDER"}</p><h2>{isEdit ? `Edit ${plan.name}` : "Create a plan"}</h2></div><button data-testid="close-plan-modal-button" type="button" className="icon-button" onClick={onClose}><X size={18} /></button></div>
     <label>Plan name<input data-testid="plan-name-input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
     <div className="form-grid">
       <label>Duration (months)<input data-testid="plan-duration-input" type="number" min="1" value={form.duration_months} onChange={(e) => setForm({ ...form, duration_months: e.target.value })} /></label>
-      <label>Price<input data-testid="plan-price-input" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
+      <label>Price (₹)<input data-testid="plan-price-input" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
     </div>
     <label>Description<textarea data-testid="plan-description-input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+    <label className="checkbox-row"><input data-testid="plan-active-input" type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Available for new registrations</label>
     {error && <div data-testid="plan-error" className="form-error">{error}</div>}
-    <div className="modal-foot"><button data-testid="save-plan-button" className="primary-button">Save plan</button></div>
+    <div className="modal-foot"><button data-testid="save-plan-button" className="primary-button">{isEdit ? "Save changes" : "Create plan"}</button></div>
   </form></div>;
 }
 
+/* -------- Payments / Reports / Notifications / Audit / Settings -------- */
 function Payments() {
   const [payments, setPayments] = useState([]);
   const load = () => api.get("/payments").then((r) => setPayments(r.data));
@@ -439,13 +417,14 @@ function SettingsPage() {
     </div>
     <div className="settings-section">
       <p className="eyebrow">INTEGRATIONS</p>
-      <div className="integration-row"><div className="integration-symbol whatsapp"><MessageSquare size={19} /></div><div><strong>WhatsApp Cloud API</strong><span>Provider abstraction ready · awaiting Meta credentials</span></div><span className="integration-state">Disabled</span></div>
-      <div className="integration-row"><div className="integration-symbol storage"><Activity size={19} /></div><div><strong>Member photo storage</strong><span>Upload interface ready · awaiting object storage credentials</span></div><span className="integration-state">Disabled</span></div>
+      <div className="integration-row"><div className="integration-symbol whatsapp"><MessageSquare size={19} /></div><div><strong>WhatsApp Cloud API</strong><span>Provider abstraction ready · welcome + expiry + cancellation records already queued</span></div><span className="integration-state">Disabled</span></div>
+      <div className="integration-row"><div className="integration-symbol storage" style={{ color: "var(--green)", background: "#1e3229" }}><Activity size={19} /></div><div><strong>Member photo storage</strong><span>Cloudflare R2 bucket · uploads flow through pre-signed URLs</span></div><span className="integration-state" style={{ color: "var(--green)" }}>Live</span></div>
       <div className="integration-row"><div className="integration-symbol whatsapp"><ShieldCheck size={19} /></div><div><strong>Automated lifecycle</strong><span>APScheduler running daily at 00:15 Asia/Kolkata · notification retries every 15 minutes</span></div><span className="integration-state" style={{ color: "var(--green)" }}>Live</span></div>
     </div>
   </form></div>;
 }
 
+/* -------- App shell -------- */
 function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("overview");
@@ -453,8 +432,6 @@ function App() {
   const [data, setData] = useState(null);
   const [plans, setPlans] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [memberMode, setMemberMode] = useState(false);
-  const [memberAuthed, setMemberAuthed] = useState(false);
   const [running, setRunning] = useState(false);
   const refresh = async () => {
     try { const [d, p, n] = await Promise.all([api.get("/dashboard"), api.get("/plans"), api.get("/notifications")]);
@@ -465,12 +442,7 @@ function App() {
   const runJobs = async () => { setRunning(true); try { await api.post("/jobs/run"); await refresh(); } finally { setRunning(false); } };
   const pendingNotifs = useMemo(() => notifications.filter((n) => !["SENT", "FAILED_MAX_ATTEMPTS"].includes(n.status)).length, [notifications]);
 
-  if (memberMode) {
-    return memberAuthed
-      ? <MemberPortal onExit={() => { setMemberAuthed(false); setMemberMode(false); }} />
-      : <MemberLogin onMemberLogin={() => setMemberAuthed(true)} onBack={() => setMemberMode(false)} />;
-  }
-  if (!user) return <Login onLogin={setUser} onMember={() => setMemberMode(true)} />;
+  if (!user) return <Login onLogin={setUser} />;
   const content = {
     overview: <Overview data={data} setPage={setPage} />,
     members: <Members members={data?.members || []} plans={plans} refresh={refresh} />,
@@ -483,7 +455,7 @@ function App() {
   }[page];
   return <div className="app-shell">
     <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} notificationCount={pendingNotifs} onLogout={async () => { await api.post("/auth/logout"); setUser(null); }} />
-    <main className="main-shell"><Topbar page={page} onMember={() => setMemberMode(true)} onRunJobs={runJobs} running={running} />{content}</main>
+    <main className="main-shell"><Topbar page={page} onRunJobs={runJobs} running={running} />{content}</main>
   </div>;
 }
 

@@ -299,7 +299,8 @@ class LifecycleService:
             "full_name": payload["full_name"],
             "phone": payload["phone"],
             "address": payload.get("address", ""),
-            "photo_url": payload.get("photo_url"),
+            "photo_key": payload.get("photo_key"),
+            "photo_url": None,
             "plan_id": plan["id"],
             "start_date": start.isoformat(),
             "expiry_date": expiry.isoformat(),
@@ -509,6 +510,7 @@ class LifecycleService:
 
     @staticmethod
     async def process_deletions() -> int:
+        from storage import delete_object  # local import to avoid circular boot
         today = today_ist()
         count = 0
         cursor = db.members.find(
@@ -517,6 +519,8 @@ class LifecycleService:
         )
         async for member in cursor:
             member_id = member["id"]
+            if member.get("photo_key"):
+                delete_object(member["photo_key"])
             await db.members.update_one(
                 {"id": member_id},
                 {"$set": {
@@ -525,6 +529,7 @@ class LifecycleService:
                     "phone": f"[erased-{member_id[-5:]}]",
                     "address": None,
                     "photo_url": None,
+                    "photo_key": None,
                     "notes": None,
                     "payment_method": None,
                     "updated_at": now_utc(),
