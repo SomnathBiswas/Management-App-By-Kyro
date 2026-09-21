@@ -18,6 +18,10 @@
       "dest": "/static/$1"
     },
     {
+      "src": "/logo.png",
+      "dest": "/logo.png"
+    },
+    {
       "src": "/favicon.ico",
       "dest": "/favicon.ico"
     },
