@@ -3,7 +3,7 @@ import axios from "axios";
 import { Activity, ArrowUpRight, Bell, CalendarDays, Check, ChevronRight, CircleDollarSign, ClipboardList, Edit3, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Plus, RefreshCw, Search, Settings, ShieldCheck, Trash2, Upload, Users, Wallet, X } from "lucide-react";
 import "@/App.css";
 
-const API = `${process.env.REACT_APP_BACKEND_URL || 'https://management-app-by-kyro-u9y4.vercel.app'}/api`;
+const API = `${process.env.REACT_APP_BACKEND_URL || 'https://management-app-by-kyro-n2jh.vercel.app'}/api`;
 const api = axios.create({ baseURL: API, withCredentials: true });
 
 const statusMeta = { ACTIVE: ["Active", "good"], EXPIRING_SOON: ["Expiring", "warn"], GRACE_PERIOD: ["Grace period", "warn"], EXPIRED: ["Expired", "warn"], CANCELLED: ["Cancelled", "bad"], PERMANENTLY_DELETED: ["Erased", "bad"] };
