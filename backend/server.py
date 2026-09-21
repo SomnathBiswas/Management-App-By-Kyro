@@ -50,7 +50,7 @@ def _configure_cors() -> None:
     if frontend_origin and frontend_origin not in configured:
         configured.append(frontend_origin)
     allow_origins = configured if configured else ["*"]
-    allow_credentials = bool(configured)
+    allow_credentials = True  # Always allow credentials for cross-site cookies
     if configured:
         pattern = "|".join(re.escape(origin.rstrip("/")) for origin in configured)
         origin_regex: str | None = pattern
