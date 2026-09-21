@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Activity, ArrowUpRight, Bell, CalendarDays, Check, ChevronRight, CircleDollarSign, ClipboardList, Edit3, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Plus, RefreshCw, Search, Settings, ShieldCheck, Trash2, Upload, Users, Wallet, X } from "lucide-react";
+import { Analytics } from "@vercel/analytics/react";
 import "@/App.css";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -458,6 +459,7 @@ function App() {
   return <div className="app-shell">
     <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} notificationCount={pendingNotifs} onLogout={async () => { await api.post("/auth/logout"); setUser(null); }} settings={settings} />
     <main className="main-shell"><Topbar page={page} onRunJobs={runJobs} running={running} settings={settings} />{content}</main>
+    <Analytics />
   </div>;
 }
 
