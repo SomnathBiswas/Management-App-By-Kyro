@@ -71,15 +71,14 @@ _configure_cors()
 
 @app.on_event("startup")
 async def _startup() -> None:
-    # Temporarily disabled for MongoDB connection troubleshooting
-    # await ensure_indexes()
-    # await seed()
-    # start_scheduler()
-    logger.info("titangym.startup_complete - database operations disabled")
+    await ensure_indexes()
+    await seed()
+    start_scheduler()
+    logger.info("titangym.startup_complete")
 
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-    # shutdown_scheduler()
-    # client.close()
-    logger.info("titangym.shutdown_complete - database operations disabled")
+    shutdown_scheduler()
+    client.close()
+    logger.info("titangym.shutdown_complete")
