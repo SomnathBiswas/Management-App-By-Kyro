@@ -44,23 +44,10 @@ app.include_router(api)
 
 # ---------- CORS ----------
 def _configure_cors() -> None:
-    raw = os.environ.get("CORS_ORIGINS", "")
-    configured = [origin.strip() for origin in raw.split(",") if origin.strip() and origin.strip() != "*"]
-    frontend_origin = os.environ.get("FRONTEND_URL")
-    if frontend_origin and frontend_origin not in configured:
-        configured.append(frontend_origin)
-    allow_origins = configured if configured else ["*"]
-    allow_credentials = True  # Always allow credentials for cross-site cookies
-    if configured:
-        pattern = "|".join(re.escape(origin.rstrip("/")) for origin in configured)
-        origin_regex: str | None = pattern
-    else:
-        origin_regex = None
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allow_origins,
-        allow_origin_regex=origin_regex,
-        allow_credentials=allow_credentials,
+        allow_origins=["*"],
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
