@@ -12,22 +12,42 @@
     padding: 20px;
   }
   .sidebar {
-    width: 60px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    flex-direction: row;
+    padding: 10px 15px;
+    z-index: 1000;
   }
   .sidebar.collapsed {
-    width: 60px;
+    width: 100%;
   }
-  .sidebar.collapsed span,
-  .sidebar.collapsed .side-label,
-  .sidebar.collapsed .provider-state div,
-  .sidebar.collapsed .logout-button span {
+  .sidebar nav {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+  }
+  .sidebar nav button {
+    white-space: nowrap;
+  }
+  .side-label,
+  .side-bottom {
     display: none;
+  }
+  .sidebar.collapsed span {
+    display: inline;
   }
   .app-shell {
     flex-direction: column;
   }
   .main-shell {
     margin-left: 0;
+    margin-top: 60px;
   }
   .topbar {
     padding: 15px;
