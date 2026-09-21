@@ -29,6 +29,8 @@ GYM_TZ_NAME = os.environ.get("GYM_TIMEZONE", "Asia/Kolkata")
 GYM_TZ = ZoneInfo(GYM_TZ_NAME)
 
 WHATSAPP_ENABLED = bool(os.environ.get("WHATSAPP_ACCESS_TOKEN") and os.environ.get("WHATSAPP_PHONE_NUMBER_ID"))
+WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
 STORAGE_ENABLED = bool(os.environ.get("S3_ACCESS_KEY_ID") and os.environ.get("S3_BUCKET_NAME") and os.environ.get("S3_ENDPOINT"))
 OTP_DEV_MODE = os.environ.get("OTP_DEV_MODE", "1") == "1"
 

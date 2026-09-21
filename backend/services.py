@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import httpx
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -24,6 +25,8 @@ from core import (
     parse_date,
     today_ist,
     WHATSAPP_ENABLED,
+    WHATSAPP_ACCESS_TOKEN,
+    WHATSAPP_PHONE_NUMBER_ID,
 )
 
 
@@ -45,6 +48,41 @@ STATUS_EXPIRING = "EXPIRING_SOON"
 STATUS_GRACE = "GRACE_PERIOD"
 STATUS_CANCELLED = "CANCELLED"
 STATUS_DELETED = "PERMANENTLY_DELETED"
+
+
+# ---------- WhatsApp Message Templates ----------
+
+def get_welcome_message(member_name: str, gym_name: str, plan_name: str, start_date: str, expiry_date: str) -> str:
+    return f"""Welcome to KYRO! 💪
+
+Hi {member_name},
+
+Thank you for choosing {gym_name}! Your membership has been successfully activated. 🎉
+
+Membership: {plan_name}
+Start Date: {start_date}
+Expiry Date: {expiry_date}
+
+We're excited to have you with us. Stay consistent, stay strong, and let's achieve your fitness goals together! 🔥
+
+Thank you,
+Team Kyro 💙
+Stronger Every Day."""
+
+
+def get_expiry_message(member_name: str, gym_name: str, plan_name: str, expiry_date: str, grace_end_date: str) -> str:
+    return f"""Hi {member_name},
+
+Your {plan_name} membership at {gym_name} has expired on {expiry_date}.
+
+You have a 7-day grace period to renew your membership and continue your fitness journey with us. 💪
+
+Grace Period Ends: {grace_end_date}
+
+Please renew before the grace period ends to avoid cancellation.
+
+Team KYRO 💙
+Stronger Every Day."""
 
 
 # =====================================================================
@@ -141,14 +179,92 @@ class NotificationService:
         now = now_utc()
         attempts = int(notification.get("attempts", 0)) + 1
         update: Dict[str, Any] = {"attempts": attempts, "updated_at": now}
+        
         if not WHATSAPP_ENABLED:
             update["status"] = "QUEUED_PROVIDER_DISABLED"
             update["error_message"] = "Provider disabled: WhatsApp credentials not configured"
             update["next_retry_at"] = None
-        else:  # pragma: no cover - real provider not wired in this environment
-            update["status"] = "SENT"
-            update["sent_at"] = now
-            update["provider_message_id"] = "sim_" + secrets.token_hex(6)
+        else:
+            # Fetch member data
+            member = await db.members.find_one({"id": notification["member_id"]}, {"_id": 0})
+            if not member:
+                update["status"] = "FAILED"
+                update["error_message"] = "Member not found"
+                update["failed_at"] = now
+            else:
+                # Fetch settings for gym name
+                settings = await db.settings.find_one({}, {"_id": 0})
+                gym_name = settings.get("gym_name", "KYRO") if settings else "KYRO"
+                
+                # Format message based on notification type
+                notification_type = notification["type"]
+                phone = member.get("phone")
+                
+                if not phone:
+                    update["status"] = "FAILED"
+                    update["error_message"] = "Member has no phone number"
+                    update["failed_at"] = now
+                else:
+                    # Prepare message content
+                    if notification_type == "WELCOME":
+                        message = get_welcome_message(
+                            member.get("name", "Member"),
+                            gym_name,
+                            member.get("plan_name", "Membership"),
+                            member.get("start_date", ""),
+                            member.get("expiry_date", "")
+                        )
+                    elif notification_type in ["EXPIRY", "EXPIRY_REMINDER", "GRACE_FINAL"]:
+                        message = get_expiry_message(
+                            member.get("name", "Member"),
+                            gym_name,
+                            member.get("plan_name", "Membership"),
+                            member.get("expiry_date", ""),
+                            member.get("grace_period_end", "")
+                        )
+                    else:
+                        message = f"Notification from {gym_name}: {notification_type}"
+                    
+                    # Send via WhatsApp API
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            response = await client.post(
+                                f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/messages",
+                                headers={
+                                    "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+                                    "Content-Type": "application/json"
+                                },
+                                json={
+                                    "messaging_product": "whatsapp",
+                                    "to": phone,
+                                    "type": "text",
+                                    "text": {"body": message}
+                                },
+                                timeout=30.0
+                            )
+                            
+                            if response.status_code == 200:
+                                result = response.json()
+                                update["status"] = "SENT"
+                                update["sent_at"] = now
+                                update["provider_message_id"] = result.get("messages", [{}])[0].get("id")
+                                logger.info("whatsapp_sent notification_id=%s phone=%s", notification["id"], phone)
+                            else:
+                                update["status"] = "FAILED"
+                                update["error_message"] = f"API error: {response.status_code} {response.text}"
+                                update["failed_at"] = now
+                                logger.error("whatsapp_failed notification_id=%s error=%s", notification["id"], response.text)
+                    except Exception as e:
+                        update["status"] = "FAILED"
+                        update["error_message"] = f"Exception: {str(e)}"
+                        update["failed_at"] = now
+                        logger.exception("whatsapp_exception notification_id=%s", notification["id"])
+                    
+                    # Set retry time if failed
+                    if update["status"] == "FAILED" and attempts < MAX_NOTIFICATION_ATTEMPTS:
+                        retry_minutes = RETRY_BACKOFF_MINUTES[min(attempts - 1, len(RETRY_BACKOFF_MINUTES) - 1)]
+                        update["next_retry_at"] = (now + timedelta(minutes=retry_minutes)).isoformat()
+        
         await db.notifications.update_one({"id": notification["id"]}, {"$set": update})
         return {**notification, **update}
 

@@ -28,9 +28,9 @@ function Login({ onLogin }) {
     finally { setLoading(false); }
   };
   return <main className="login-shell">
-    <div className="login-visual"><div className="brand-mark">T<span>G</span></div><p className="eyebrow">PERFORMANCE OPERATING SYSTEM</p><h1>Train hard.<br /><em>Run smarter.</em></h1><p className="login-copy">The command centre for gyms that take every member seriously.</p><div className="login-stat"><strong>94.8%</strong><span>member retention<br />this month</span></div></div>
+    <div className="login-visual"><div className="brand-mark brand-left"><img src="/logo.png" alt="Logo" className="custom-logo" /></div><p className="eyebrow">PERFORMANCE OPERATING SYSTEM</p><h1>Train hard.<br /><em>Run smarter.</em></h1><p className="login-copy">The command centre for gyms that take every member seriously.</p><div className="login-stat"><strong>94.8%</strong><span>member retention<br />this month</span></div></div>
     <div className="login-panel">
-      <div className="mobile-brand">TITANGYM <span>OS</span></div>
+      <div className="mobile-brand"><img src="/logo.png" alt="Logo" className="custom-logo" /> <span>OS</span></div>
       <p className="eyebrow">STAFF ACCESS</p><h2>Welcome back.</h2><p className="muted">Sign in to your gym command centre.</p>
       <form onSubmit={submit} className="login-form">
         <label>Email address<input data-testid="login-email-input" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required /></label>
@@ -44,7 +44,7 @@ function Login({ onLogin }) {
 }
 
 /* -------- Sidebar / Topbar -------- */
-function Sidebar({ page, setPage, onLogout, collapsed, setCollapsed, notificationCount }) {
+function Sidebar({ page, setPage, onLogout, collapsed, setCollapsed, notificationCount, settings }) {
   const links = [
     ["overview", "Overview", LayoutDashboard],
     ["members", "Members", Users],
@@ -56,7 +56,7 @@ function Sidebar({ page, setPage, onLogout, collapsed, setCollapsed, notificatio
     ["settings", "Gym settings", Settings],
   ];
   return <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
-    <div className="side-top"><div className="brand-mark small">T<span>G</span></div><button data-testid="sidebar-collapse-button" className="icon-button" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle sidebar"><Menu size={19} /></button></div>
+    <div className="side-top"><div className="brand-mark small"><img src="/logo.png" alt="Logo" className="custom-logo" /></div><button data-testid="sidebar-collapse-button" className="icon-button" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle sidebar"><Menu size={19} /></button></div>
     <div className="side-label">WORKSPACE</div>
     <nav>{links.map(([id, label, Icon]) => <button data-testid={`nav-${id}-button`} key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}><Icon size={18} /><span>{label}</span>{id === "notifications" && notificationCount > 0 && <b>{notificationCount}</b>}</button>)}</nav>
     <div className="side-bottom">
@@ -66,7 +66,7 @@ function Sidebar({ page, setPage, onLogout, collapsed, setCollapsed, notificatio
   </aside>;
 }
 
-function Topbar({ page, onRunJobs, running }) {
+function Topbar({ page, onRunJobs, running, settings }) {
   const titles = {
     overview: ["Good morning, Arjun", "Here's the pulse of your floor today."],
     members: ["Members", "Register, edit and manage every member here."],
@@ -77,8 +77,9 @@ function Topbar({ page, onRunJobs, running }) {
     audit: ["Audit log", "A trace of every important action."],
     settings: ["Gym settings", "Tune the operating rules for TitanGym."],
   };
+  const gymName = settings?.gym_name || "TITANGYM";
   return <header className="topbar">
-    <div><p className="eyebrow">TITANGYM OS · ADMIN</p><h1 data-testid="page-title">{titles[page][0]}</h1><p className="muted">{titles[page][1]}</p></div>
+    <div><p className="eyebrow">{gymName} OS · ADMIN</p><h1 data-testid="page-title">{titles[page][0]}</h1><p className="muted">{titles[page][1]}</p></div>
     <div className="top-actions">
       <button data-testid="run-lifecycle-button" className="ghost-button" onClick={onRunJobs} disabled={running}><RefreshCw size={15} className={running ? "spin" : ""} /> {running ? "Running…" : "Run lifecycle"}</button>
       <div data-testid="admin-avatar" className="avatar">AM</div>
@@ -432,10 +433,11 @@ function App() {
   const [data, setData] = useState(null);
   const [plans, setPlans] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [running, setRunning] = useState(false);
   const refresh = async () => {
-    try { const [d, p, n] = await Promise.all([api.get("/dashboard"), api.get("/plans"), api.get("/notifications")]);
-      setData(d.data); setPlans(p.data); setNotifications(n.data);
+    try { const [d, p, n, s] = await Promise.all([api.get("/dashboard"), api.get("/plans"), api.get("/notifications"), api.get("/settings")]);
+      setData(d.data); setPlans(p.data); setNotifications(n.data); setSettings(s.data);
     } catch (err) { if (err.response?.status === 401) setUser(null); }
   };
   useEffect(() => { if (user) refresh(); }, [user]);
@@ -454,8 +456,8 @@ function App() {
     settings: <SettingsPage />,
   }[page];
   return <div className="app-shell">
-    <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} notificationCount={pendingNotifs} onLogout={async () => { await api.post("/auth/logout"); setUser(null); }} />
-    <main className="main-shell"><Topbar page={page} onRunJobs={runJobs} running={running} />{content}</main>
+    <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} notificationCount={pendingNotifs} onLogout={async () => { await api.post("/auth/logout"); setUser(null); }} settings={settings} />
+    <main className="main-shell"><Topbar page={page} onRunJobs={runJobs} running={running} settings={settings} />{content}</main>
   </div>;
 }
 
