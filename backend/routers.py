@@ -101,7 +101,8 @@ async def login(payload: LoginInput, response: Response) -> Dict[str, Any]:
         "access_token",
         issue_token(user["id"], user.get("role", "ADMIN")),
         httponly=True,
-        samesite="lax",
+        samesite="none",
+        secure=True,
         max_age=43200,
     )
     await AuditService.record(
@@ -117,7 +118,7 @@ async def login(payload: LoginInput, response: Response) -> Dict[str, Any]:
 
 @api.post("/auth/logout")
 async def logout(response: Response) -> Dict[str, bool]:
-    response.delete_cookie("access_token")
+    response.delete_cookie("access_token", samesite="none", secure=True)
     return {"success": True}
 
 
