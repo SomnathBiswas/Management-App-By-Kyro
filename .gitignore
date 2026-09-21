@@ -66,6 +66,9 @@ chainlit.md
 # Deployment
 .vercel
 
+# Development tooling
+.emergent/
+
 # Data and databases
 agenthub/agents/youtube/db
 
